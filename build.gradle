@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.4.2'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+    maven { url 'https://repo.maven.apache.org/maven2/' }
+}
+
+dependencies {
+    // Paper API・・olia 繧・Paper API 繝吶・繧ｹ縲ヾpigot 髱樔ｺ呈鋤縺ｧ繧医＞・・    // 26.1.2 縺ｯ譛ｪ蜈ｬ髢九・縺溘ａ縲∵怙譁ｰ縺ｮ 26.2.x 繧｢繝ｫ繝輔ぃ繝薙Ν繝峨ｒ菴ｿ逕ｨ
+    compileOnly 'io.papermc.paper:paper-api:26.2-R0.1-SNAPSHOT'
+    // HikariCP繝ｻMySQL Connector 縺ｯ shaded jar 縺ｫ蜷梧｢ｱ
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    implementation 'com.mysql:mysql-connector-j:8.3.0'
+}
+
+tasks.shadowJar {
+    archiveClassifier = ''
+    relocate 'com.zaxxer.hikari', 'com.example.sharedchest.libs.hikari'
+    relocate 'com.mysql', 'com.example.sharedchest.libs.mysql'
+}
+
+tasks.build {
+    dependsOn tasks.shadowJar
+}
+
+

@@ -1,0 +1,11 @@
+database:
+  host: "localhost"
+  port: 3306
+  name: "sharedchest"
+  user: "root"
+  password: "password"
+  pool-size: 5
+
+chest:
+  title: "<gold>共有チェスト"
+  rows: 3
