@@ -5,6 +5,8 @@ database:
   user: "root"
   password: "password"
   pool-size: 5
+  # データベースとの通信を TLS で暗号化するか。別のマシンの MySQL へ接続するときは true を推奨します
+  use-ssl: false
 
 chest:
   title: "<gold>共有チェスト"

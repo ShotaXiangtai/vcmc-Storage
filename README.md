@@ -1,23 +1,45 @@
 # SharedChest (vcmc-Storage)
 
-## 概要
-データベース（MySQL）を利用して、複数サーバー間でアイテムを共有できる共有チェストを提供する Paper（Folia対応・Kotlin製）プラグインです。
-データベースのフラグを用いた排他制御（ロック機構）およびタイムアウト自動解放により、複数サーバー間でのアイテム増殖（デュープ）を防止します。
+MySQL を使って複数サーバー間でアイテムを共有できる共有チェストの Folia 26.3 向けプラグインです。
+開いている間はロックするので、別のサーバーから同時に開いてアイテムを増やすことはできません。
+
+## 動作環境
+
+| 項目 | バージョン |
+|---|---|
+| サーバー | Folia 26.3（`folia-api 26.3.build.6-alpha` でビルド） |
+| Java | 25 以上 |
+| データベース | MySQL 8 以降 |
 
 ## 機能
-- **データベース保存**: プレイヤーごとのチェスト内容をMySQLデータベースに保存・同期。
-- **Folia完全対応**: `AsyncScheduler` を用いた非同期のDB通信と、`EntityScheduler` を用いた安全なインベントリ操作を実装しています。
-- **排他制御（デュープ対策）**: 共有チェストを開く際、データベース上で `is_open` フラグを用いたロック処理を行い、同時に別サーバーで開くことを防ぎます（クラッシュ時の5分タイムアウト自動解放およびサーバー停止時の同期保存に対応）。
-- **MiniMessage対応**: チェストタイトルなどでAdventure Component（MiniMessage）を使用可能。
-- **スロット保存**: `BukkitObjectOutputStream` によるBase64シリアライズを利用し、アイテムメタデータと配置スロットを完全に復元します。
+
+- **データベース保存**: プレイヤーごとのチェストの内容を MySQL に保存します。
+- **Folia 対応**: データベースの処理は専用のスレッドで、インベントリの操作はプレイヤーのリージョンで行います。
+- **排他制御**: チェストを開くと、開いたサーバーだけが持つトークンでロックします。開いている間は毎分ロックを更新するので、長く開いていても別のサーバーからは開けません。
+- **クラッシュからの復帰**: サーバーが落ちてロックが残っても、5 分たてば開けるようになります。
+- **アイテムを失わないための動作**
+  - 読み込みに失敗したときは、空のチェストを開かずにエラーを表示します。
+  - `chest.rows` を減らしても、入っているアイテムが収まる大きさで開きます。
+  - データベースに保存できなかったときは 3 回やり直し、それでも失敗したら復旧用ファイルへ書き出します。
+- **MiniMessage 対応**: チェストのタイトルに MiniMessage を使えます。
+
+### 1.0.0 からの更新
+
+jar を入れ替えるだけで動きます。すべてのサーバーを同時に更新してください。
+
+- テーブルに `lock_token` 列を自動で追加します。
+- 保存形式を Paper の NBT 形式に変更しました。1.0.0 で保存した内容も読み込めて、次に閉じたときに新しい形式で保存します。
 
 ## コマンド
-- `/gchest` : 自分の共有チェストを開きます。
+
+- `/gchest`: 自分の共有チェストを開きます。
 
 ## パーミッション
-- `sharedchest.use` : 共有チェストを開く権限（デフォルト: `true`）
+
+- `sharedchest.use`: 共有チェストを開く権限（デフォルト: `true`）
 
 ## 設定 (config.yml)
+
 ```yaml
 database:
   host: "localhost"      # データベースホスト
@@ -25,21 +47,39 @@ database:
   name: "sharedchest"    # データベース名
   user: "root"           # データベースユーザー
   password: "password"   # データベースパスワード
-  pool-size: 5           # HikariCPのコネクションプールサイズ
+  pool-size: 5           # HikariCP のコネクションプールサイズ
+  use-ssl: false         # 通信を TLS で暗号化するか
 
 chest:
-  title: "<gold>共有チェスト" # チェストのタイトル (MiniMessage形式)
+  title: "<gold>共有チェスト" # チェストのタイトル (MiniMessage 形式)
   rows: 3                    # チェストの行数 (1〜6)
 ```
 
+## 復旧用ファイルからの復旧
+
+コンソールに「チェストの内容を ... へ保存しました」と出たときは、`plugins/SharedChest/recovery/<UUID>-<日時>.txt` に内容が保存されています。対象のプレイヤーがチェストを開いていないことを確認してから、ファイルの中身を `contents` 列へ入れてください。
+
+```sql
+UPDATE shared_chests SET contents = '<ファイルの中身>', is_open = 0, lock_token = NULL WHERE uuid = '<UUID>';
+```
+
 ## コード構成
-- `SharedChestPlugin.kt`
-  - メインクラス。設定の読み込み、DB初期化、コマンド・リスナーの登録、サーバー停止時の同期保存を行います。
-- `command/ChestCommand.kt`
-  - `/gchest` コマンドの処理。非同期でDBロックを取得し、成功した場合のみ `EntityScheduler` を介してインベントリを開きます。
-- `database/DatabaseManager.kt`
-  - HikariCPを使用した接続管理クラス。チェストのセーブ/ロード機能と、`tryLock()` / `unlock()` によるアトミックな排他制御を提供します。
-- `listener/ChestListener.kt`
-  - インベントリを閉じた時（`InventoryCloseEvent`）やプレイヤー切断時（`PlayerQuitEvent`）を検知し、チェスト内容の保存とロック解除を実行します。
-- `util/ItemSerializer.kt`
-  - `Array<ItemStack?>` と Base64 文字列間のシリアライズ・デシリアライズを担当します。
+
+- `SharedChestPlugin.kt`: メインクラス。初期化とコマンドの登録、データベース用スレッドの管理を行います。
+- `ChestService.kt`: チェストの開閉と保存。
+- `command/ChestCommand.kt`: `/gchest`。
+- `database/DatabaseManager.kt`: HikariCP の接続プール。
+- `database/ChestRepository.kt`: `shared_chests` テーブルの読み書きとロック。
+- `listener/ChestListener.kt`: インベントリを閉じたときと切断時の保存。
+- `util/ItemSerializer.kt`: `ItemStack` 配列と文字列の変換。
+- `util/ChestLayout.kt`: チェストの大きさの計算。
+
+## ビルド
+
+Java 25 が必要です。
+
+```
+mvn package
+```
+
+`target/SharedChest-<バージョン>.jar` が生成されます。テストは H2 の MySQL 互換モードでロックの動きを確認します。

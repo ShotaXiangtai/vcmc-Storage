@@ -2,57 +2,48 @@ package com.example.sharedchest.util
 
 import org.bukkit.inventory.ItemStack
 import org.bukkit.util.io.BukkitObjectInputStream
-import org.bukkit.util.io.BukkitObjectOutputStream
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.Base64
 
+/** ItemStack 配列と、データベースに保存する文字列の変換。 */
 object ItemSerializer {
+    /** Paper の NBT 形式。アイテムの形式はサーバーの更新時に自動で移行される。 */
+    private const val FORMAT_PREFIX = "v2:"
+
+    fun isLegacyFormat(data: String): Boolean = !data.startsWith(FORMAT_PREFIX)
+
+    fun serialize(items: Array<ItemStack?>): String =
+        FORMAT_PREFIX + Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(items))
 
     /**
-     * ItemStack 配列を Base64 文字列にシリアライズする
-     * null スロットも保持する
+     * 文字列から ItemStack 配列へ戻す。保存されていたスロットはすべて返す。
+     * 空の文字列は、まだ何も保存していないチェストなので空の配列を返す。
+     *
+     * @throws Exception データが壊れているとき。空のチェストとして開くと保存時に中身が消えるので、呼び出し側で開くのをやめること。
      */
-    @Throws(IOException::class)
-    fun serialize(items: Array<ItemStack?>): String {
-        ByteArrayOutputStream().use { baos ->
-            BukkitObjectOutputStream(baos).use { boos ->
-                boos.writeInt(items.size)
-                for (item in items) {
-                    boos.writeObject(item)
-                }
-            }
-            return Base64.getEncoder().encodeToString(baos.toByteArray())
-        }
+    fun deserialize(data: String): Array<ItemStack?> {
+        if (data.isEmpty()) return emptyArray()
+        if (isLegacyFormat(data)) return deserializeLegacy(data)
+        val bytes = Base64.getDecoder().decode(data.removePrefix(FORMAT_PREFIX))
+        return ItemStack.deserializeItemsFromBytes(bytes)
+            .map { item -> item.takeUnless { it.isEmpty } }
+            .toTypedArray()
     }
 
-    /**
-     * Base64 文字列から ItemStack 配列をデシリアライズする
-     * slots に指定したサイズで配列を返す
-     */
-    @Throws(IOException::class)
-    fun deserialize(base64: String, slots: Int): Array<ItemStack?> {
-        val data = Base64.getDecoder().decode(base64)
-        ByteArrayInputStream(data).use { bais ->
-            BukkitObjectInputStream(bais).use { bois ->
-                val savedSize = bois.readInt()
-                val items = arrayOfNulls<ItemStack>(slots)
-                val readCount = minOf(savedSize, slots)
-                for (i in 0 until readCount) {
+    /** 1.0.0 で保存した内容を読む。次に閉じたときに新しい形式で保存される。 */
+    @Suppress("DEPRECATION")
+    private fun deserializeLegacy(data: String): Array<ItemStack?> {
+        ByteArrayInputStream(Base64.getDecoder().decode(data)).use { bytes ->
+            BukkitObjectInputStream(bytes).use { input ->
+                val size = input.readInt()
+                return Array(size) { slot ->
                     try {
-                        items[i] = bois.readObject() as? ItemStack
+                        input.readObject() as? ItemStack
                     } catch (e: ClassNotFoundException) {
-                        throw IOException("スロット $i のアイテムデシリアライズに失敗しました", e)
+                        throw IOException("スロット $slot のアイテムを読み込めませんでした", e)
                     }
                 }
-                for (i in readCount until savedSize) {
-                    try {
-                        bois.readObject()
-                    } catch (_: ClassNotFoundException) {
-                    }
-                }
-                return items
             }
         }
     }

@@ -1,18 +1,11 @@
 name: SharedChest
-version: 1.0.0
+version: '${project.version}'
 main: com.example.sharedchest.SharedChestPlugin
-api-version: '26.2'
+api-version: '26.3'
 folia-supported: true
-
-commands:
-  gchest:
-    description: 'Plugin feature'
-    usage: /gchest
-    permission: sharedchest.use
+description: 'Cross-server shared chest plugin for Folia'
 
 permissions:
   sharedchest.use:
-    description: 'Plugin feature'
+    description: '/gchest で共有チェストを開く'
     default: true
-
-
