@@ -2,19 +2,34 @@ package com.example.sharedchest.util
 
 import org.bukkit.inventory.ItemStack
 import org.bukkit.util.io.BukkitObjectInputStream
+import org.bukkit.util.io.BukkitObjectOutputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.Base64
 
-/** ItemStack 配列と、データベースに保存する文字列の変換。 */
+/**
+ * ItemStack 配列と、データベースに保存する文字列の変換。
+ *
+ * 保存は以前の形式のまま行う。1.0.0 は新しい形式を読めず、空のチェストとして開いて中身を消してしまうので、
+ * 1.0.0 のサーバーが残っている間は切り替えられない。
+ * 読み込みは Paper の NBT 形式にも対応しているので、全サーバーが 1.1.0 以上になれば次のバージョンで安全に切り替えられる。
+ */
 object ItemSerializer {
-    /** Paper の NBT 形式。アイテムの形式はサーバーの更新時に自動で移行される。 */
-    private const val FORMAT_PREFIX = "v2:"
+    /** Paper の NBT 形式の印。 */
+    private const val NBT_PREFIX = "v2:"
 
-    fun isLegacyFormat(data: String): Boolean = !data.startsWith(FORMAT_PREFIX)
+    fun isLegacyFormat(data: String): Boolean = !data.startsWith(NBT_PREFIX)
 
-    fun serialize(items: Array<ItemStack?>): String =
-        FORMAT_PREFIX + Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(items))
+    @Suppress("DEPRECATION")
+    fun serialize(items: Array<ItemStack?>): String {
+        val bytes = ByteArrayOutputStream()
+        BukkitObjectOutputStream(bytes).use { output ->
+            output.writeInt(items.size)
+            items.forEach(output::writeObject)
+        }
+        return Base64.getEncoder().encodeToString(bytes.toByteArray())
+    }
 
     /**
      * 文字列から ItemStack 配列へ戻す。保存されていたスロットはすべて返す。
@@ -25,13 +40,12 @@ object ItemSerializer {
     fun deserialize(data: String): Array<ItemStack?> {
         if (data.isEmpty()) return emptyArray()
         if (isLegacyFormat(data)) return deserializeLegacy(data)
-        val bytes = Base64.getDecoder().decode(data.removePrefix(FORMAT_PREFIX))
+        val bytes = Base64.getDecoder().decode(data.removePrefix(NBT_PREFIX))
         return ItemStack.deserializeItemsFromBytes(bytes)
             .map { item -> item.takeUnless { it.isEmpty } }
             .toTypedArray()
     }
 
-    /** 1.0.0 で保存した内容を読む。次に閉じたときに新しい形式で保存される。 */
     @Suppress("DEPRECATION")
     private fun deserializeLegacy(data: String): Array<ItemStack?> {
         ByteArrayInputStream(Base64.getDecoder().decode(data)).use { bytes ->
