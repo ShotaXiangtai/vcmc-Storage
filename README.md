@@ -36,10 +36,12 @@ jar を入れ替えるだけで動きます。テーブルに `lock_token` 列�
 ## コマンド
 
 - `/gchest`: 自分の共有チェストを開きます。
+- `/gchest reload`: `config.yml` と `lang` フォルダを再読み込みします。データベースの設定の変更には再起動が必要です。
 
 ## パーミッション
 
 - `sharedchest.use`: 共有チェストを開く権限（デフォルト: `true`）
+- `sharedchest.reload`: 設定を再読み込みする権限（デフォルト: OP）
 
 ## 設定 (config.yml)
 
@@ -66,6 +68,23 @@ chest:
 UPDATE shared_chests SET contents = '<ファイルの中身>', is_open = 0, lock_token = NULL WHERE uuid = '<UUID>';
 ```
 
+## 多言語対応
+
+プレイヤーのクライアントの言語設定に合わせて、メッセージを自動で切り替えます。ゲーム中に言語を変更すると、次のメッセージから反映されます。
+
+| クライアントの言語 | 表示する言語 | 文面の場所 |
+|---|---|---|
+| 日本語 | 日本語 | `config.yml` の `messages` と `chest.title` |
+| English（各地域） | English | `lang/en.yml` |
+| 简体中文 | 简体中文 | `lang/zh_cn.yml` |
+| 繁體中文（台灣）、文言 | 繁體中文（台灣） | `lang/zh_tw.yml` |
+| 繁體中文（香港） | 繁體中文（香港） | `lang/zh_hk.yml` |
+| 上記以外 | English | `lang/en.yml` |
+
+繁體中文（香港）の文面は広東語で書いています。コンソールへのメッセージとログは日本語のままです。
+
+`lang` フォルダのファイルは初回起動時に作られます。編集して `/gchest reload` を実行すると反映されます。ファイルに無いキーは jar 内の既定の文面を使います。
+
 ## コード構成
 
 - `SharedChestPlugin.kt`: メインクラス。初期化とコマンドの登録、データベース用スレッドの管理を行います。
@@ -76,6 +95,7 @@ UPDATE shared_chests SET contents = '<ファイルの中身>', is_open = 0, lock
 - `listener/ChestListener.kt`: インベントリを閉じたときと切断時の保存。
 - `util/ItemSerializer.kt`: `ItemStack` 配列と文字列の変換。
 - `util/ChestLayout.kt`: チェストの大きさの計算。
+- `Messages.kt`, `i18n/`: 受け取る人の言語で文面を作ります。
 
 ## ビルド
 

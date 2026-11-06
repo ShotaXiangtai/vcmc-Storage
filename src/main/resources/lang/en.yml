@@ -1,0 +1,7 @@
+# SharedChest: English
+chest-title: "<gold>Shared Chest"
+busy: "<red>Your shared chest is open on another server or being processed. Please wait a moment and try again."
+db-error: "<red>Could not load your shared chest. Please try again later. If the problem continues, contact the staff."
+open-failed: "<red>Could not open the chest. Please try again."
+player-only: "<red>Only players can use this command."
+reloaded: "<green>Settings reloaded. Database settings need a restart to take effect."

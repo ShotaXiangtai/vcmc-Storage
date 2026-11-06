@@ -1,0 +1,7 @@
+# SharedChest：简体中文
+chest-title: "<gold>共享箱子"
+busy: "<red>共享箱子正在其他服务器上打开或正在处理中。请稍后再试。"
+db-error: "<red>无法读取共享箱子。请稍后再试。如果问题持续，请联系管理人员。"
+open-failed: "<red>无法打开箱子。请重试。"
+player-only: "<red>此命令只能由玩家使用。"
+reloaded: "<green>已重新加载设置。数据库设置的更改需要重启后才生效。"

@@ -1,23 +1,38 @@
 package com.example.sharedchest.command
 
 import com.example.sharedchest.ChestService
+import com.example.sharedchest.SharedChestPlugin
 import io.papermc.paper.command.brigadier.BasicCommand
 import io.papermc.paper.command.brigadier.CommandSourceStack
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 
-/** /gchest */
-class ChestCommand(private val chests: ChestService) : BasicCommand {
+/** /gchest と /gchest reload */
+class ChestCommand(private val plugin: SharedChestPlugin, private val chests: ChestService) : BasicCommand {
 
     override fun execute(stack: CommandSourceStack, args: Array<out String>) {
         val sender = stack.sender
+        if (args.firstOrNull().equals("reload", ignoreCase = true) && sender.hasPermission(PERM_RELOAD)) {
+            plugin.reloadConfig()
+            plugin.messages.reload()
+            plugin.messages.send(sender, "reloaded")
+            return
+        }
         if (sender is Player) {
             chests.open(sender)
         } else {
-            sender.sendMessage(Component.text("このコマンドはプレイヤーのみ使用できます。", NamedTextColor.RED))
+            plugin.messages.send(sender, "player-only")
         }
     }
 
+    override fun suggest(stack: CommandSourceStack, args: Array<out String>): Collection<String> {
+        if (args.size > 1 || !stack.sender.hasPermission(PERM_RELOAD)) return emptyList()
+        val prefix = args.firstOrNull()?.lowercase().orEmpty()
+        return listOf("reload").filter { it.startsWith(prefix) }
+    }
+
     override fun permission(): String = "sharedchest.use"
+
+    private companion object {
+        const val PERM_RELOAD = "sharedchest.reload"
+    }
 }
