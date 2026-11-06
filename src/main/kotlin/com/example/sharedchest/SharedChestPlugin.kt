@@ -14,12 +14,17 @@ import java.util.logging.Level
 @Suppress("UnstableApiUsage")
 class SharedChestPlugin : JavaPlugin() {
 
+    lateinit var messages: Messages
+        private set
+
     private lateinit var databaseManager: DatabaseManager
     private lateinit var chests: ChestService
     private lateinit var dbThread: ExecutorService
 
     override fun onEnable() {
         saveDefaultConfig()
+        messages = Messages(this)
+        messages.reload()
 
         dbThread = Executors.newSingleThreadExecutor { task -> Thread(task, "SharedChest-db").apply { isDaemon = true } }
         databaseManager = DatabaseManager(logger)
@@ -27,7 +32,7 @@ class SharedChestPlugin : JavaPlugin() {
 
         server.pluginManager.registerEvents(ChestListener(chests), this)
 
-        val command = ChestCommand(chests)
+        val command = ChestCommand(this, chests)
         lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register("gchest", "共有チェストを開きます", command)
         }

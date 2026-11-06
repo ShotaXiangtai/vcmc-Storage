@@ -1,10 +1,9 @@
 package com.example.sharedchest
 
 import com.example.sharedchest.database.ChestRepository
+import com.example.sharedchest.i18n.Language
 import com.example.sharedchest.util.ChestLayout
 import com.example.sharedchest.util.ItemSerializer
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.entity.Player
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
@@ -28,23 +27,22 @@ class ChestService(private val plugin: SharedChestPlugin, private val repository
     private class Session(val player: UUID, val token: String, val inventory: Inventory)
 
     private val sessions = ConcurrentHashMap<UUID, Session>()
-    private val miniMessage = MiniMessage.miniMessage()
+    private val messages get() = plugin.messages
 
     /** どのスレッドから呼んでもよい。 */
     fun open(player: Player) {
         val id = player.uniqueId
         if (sessions.containsKey(id)) {
-            player.sendMessage(error(MESSAGE_BUSY))
+            messages.send(player, "busy")
             return
         }
         val rows = plugin.config.getInt("chest.rows", 3)
-        val title = plugin.config.getString("chest.title", "<gold>共有チェスト") ?: "<gold>共有チェスト"
         val token = UUID.randomUUID().toString()
 
         plugin.runDb {
             val items = lockAndLoad(player, token) ?: return@runDb
             val scheduled = player.scheduler.run(plugin, { _ ->
-                show(player, token, items, rows, title)
+                show(player, token, items, rows)
             }, {
                 // 開く前にログアウトした。
                 plugin.runDb { unlock(id, token) }
@@ -60,11 +58,11 @@ class ChestService(private val plugin: SharedChestPlugin, private val repository
             repository.tryLock(id, token)
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "ロック取得に失敗しました (UUID: $id)", e)
-            player.sendMessage(error(MESSAGE_DB_ERROR))
+            messages.send(player, "db-error")
             return null
         }
         if (!locked) {
-            player.sendMessage(error(MESSAGE_BUSY))
+            messages.send(player, "busy")
             return null
         }
         return try {
@@ -75,16 +73,16 @@ class ChestService(private val plugin: SharedChestPlugin, private val repository
             // ここで空のチェストを開くと、閉じたときに保存されている中身を消してしまう。
             plugin.logger.log(Level.SEVERE, "チェスト読み込みに失敗しました (UUID: $id)", e)
             unlock(id, token)
-            player.sendMessage(error(MESSAGE_DB_ERROR))
+            messages.send(player, "db-error")
             null
         }
     }
 
     /** プレイヤーのリージョンで動く。 */
-    private fun show(player: Player, token: String, items: Array<ItemStack?>, rows: Int, title: String) {
+    private fun show(player: Player, token: String, items: Array<ItemStack?>, rows: Int) {
         val id = player.uniqueId
         val size = ChestLayout.sizeFor(rows, items.indexOfLast { it != null })
-        val inventory = plugin.server.createInventory(null, size, miniMessage.deserialize(title))
+        val inventory = plugin.server.createInventory(null, size, messages.chestTitle(Language.of(player)))
         items.forEachIndexed { slot, item -> if (item != null) inventory.setItem(slot, item) }
 
         val session = Session(id, token, inventory)
@@ -92,7 +90,7 @@ class ChestService(private val plugin: SharedChestPlugin, private val repository
         if (player.openInventory(inventory) == null) {
             sessions.remove(id, session)
             plugin.runDb { unlock(id, token) }
-            player.sendMessage(error("チェストを開けませんでした。再度お試しください。"))
+            messages.send(player, "open-failed")
         }
     }
 
@@ -169,13 +167,9 @@ class ChestService(private val plugin: SharedChestPlugin, private val repository
         }
     }
 
-    private fun error(message: String): Component = miniMessage.deserialize("<red>$message")
-
     private companion object {
         const val SAVE_ATTEMPTS = 3
         const val SAVE_RETRY_DELAY_MILLIS = 2000L
-        const val MESSAGE_BUSY = "別のサーバーで共有チェストを開いているか、処理中です。しばらく待ってから再度お試しください。"
-        const val MESSAGE_DB_ERROR = "共有チェストを読み込めませんでした。時間をおいて再度お試しください。解決しない場合は運営へお知らせください。"
         val RECOVERY_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
     }
 }

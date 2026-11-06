@@ -9,3 +9,6 @@ permissions:
   sharedchest.use:
     description: '/gchest で共有チェストを開く'
     default: true
+  sharedchest.reload:
+    description: '/gchest reload で設定を再読み込みする'
+    default: op

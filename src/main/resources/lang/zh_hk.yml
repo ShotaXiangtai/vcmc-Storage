@@ -1,0 +1,7 @@
+# SharedChest：繁體中文（香港）
+chest-title: "<gold>共用儲物箱"
+busy: "<red>共用儲物箱喺第二個伺服器開緊，或者處理緊。請等陣再試。"
+db-error: "<red>讀唔到共用儲物箱。請遲啲再試。如果問題仲喺度，請搵管理團隊。"
+open-failed: "<red>開唔到儲物箱。請再試多次。"
+player-only: "<red>呢個指令淨係玩家先可以用。"
+reloaded: "<green>重新載入咗設定。資料庫設定要重新開機先生效。"
