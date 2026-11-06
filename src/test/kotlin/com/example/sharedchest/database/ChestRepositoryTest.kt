@@ -120,6 +120,24 @@ class ChestRepositoryTest {
     }
 
     @Test
+    fun `以前のバージョンのサーバーと混在しても開いている間は開けない`() {
+        // 1.0.0 のサーバーが開いている状態: is_open だけが立っていて、トークンは無い。
+        execute("CREATE TABLE IF NOT EXISTS shared_chests (uuid VARCHAR(36) PRIMARY KEY, contents LONGTEXT NOT NULL, is_open TINYINT(1) NOT NULL DEFAULT 0, lock_token VARCHAR(36) NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)")
+        execute("INSERT INTO shared_chests (uuid, contents, is_open) VALUES ('$player', '1.0.0 の内容', 1)")
+        assertFalse(repository.tryLock(player, "a"))
+    }
+
+    @Test
+    fun `以前のバージョンのサーバーが閉じた後は開ける`() {
+        repository.tryLock(player, "a")
+        // 1.0.0 の保存は is_open だけを下ろし、トークンには触らない。
+        execute("UPDATE shared_chests SET contents = '1.0.0 の内容', is_open = 0")
+        assertTrue(repository.tryLock(player, "b"))
+        assertEquals("1.0.0 の内容", repository.load(player))
+        assertTrue(repository.save(player, "b", "新しい内容"))
+    }
+
+    @Test
     fun `以前のバージョンが残したロックも期限が来れば取得できる`() {
         repository.tryLock(player, "a")
         execute("UPDATE shared_chests SET lock_token = NULL")
